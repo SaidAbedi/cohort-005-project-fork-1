@@ -13,7 +13,10 @@ export default [
     route("courses/:slug", "routes/courses.$slug.tsx"),
     route("courses/:slug/:moduleId", "routes/courses.$slug.$moduleId.tsx"),
     route("courses/:slug/purchase", "routes/courses.$slug.purchase.tsx"),
-    route("courses/:slug/refund", "routes/courses.$slug.refund.ts"),
+    route(
+      "courses/:slug/refund-request",
+      "routes/courses.$slug.refund-request.ts"
+    ),
     route("courses/:slug/welcome", "routes/courses.$slug.welcome.tsx"),
     route(
       "courses/:slug/lessons/:lessonId",
@@ -44,6 +47,10 @@ export default [
     route("admin/courses", "routes/admin.courses.tsx"),
     route("admin/categories", "routes/admin.categories.tsx"),
     route("settings", "routes/settings.tsx"),
+    route(
+      "refund-requests/:id/withdraw",
+      "routes/refund-requests.$id.withdraw.ts"
+    ),
     route("team", "routes/team.tsx"),
     route("redeem/:code", "routes/redeem.$code.tsx"),
   ]),
