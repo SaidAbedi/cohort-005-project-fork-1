@@ -12,11 +12,11 @@ import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import {
   UserRole,
-  RefundStatus,
+  RefundRequestStatus,
   users,
   courses,
   purchases,
-  refunds,
+  refundRequests,
 } from "~/db/schema";
 import { AlertTriangle } from "lucide-react";
 import { data, isRouteErrorResponse, Link } from "react-router";
@@ -55,22 +55,22 @@ export async function loader({ request }: Route.LoaderArgs) {
     throw data("User not found.", { status: 404 });
   }
 
-  const pendingChargebacks = db
+  const pendingRefundRequests = db
     .select({
-      id: refunds.id,
+      id: refundRequests.id,
       courseTitle: courses.title,
       courseSlug: courses.slug,
       amountPaid: purchases.amountPaid,
-      reason: refunds.reason,
-      requestedAt: refunds.requestedAt,
+      reason: refundRequests.reason,
+      requestedAt: refundRequests.requestedAt,
     })
-    .from(refunds)
-    .innerJoin(purchases, eq(refunds.purchaseId, purchases.id))
+    .from(refundRequests)
+    .innerJoin(purchases, eq(refundRequests.purchaseId, purchases.id))
     .innerJoin(courses, eq(purchases.courseId, courses.id))
     .where(
       and(
         eq(purchases.userId, currentUserId),
-        eq(refunds.status, RefundStatus.Requested)
+        eq(refundRequests.status, RefundRequestStatus.Pending)
       )
     )
     .all();
@@ -83,7 +83,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       bio: currentUser.bio,
       role: currentUser.role,
     },
-    pendingChargebacks,
+    pendingRefundRequests,
   };
 }
 
@@ -122,7 +122,7 @@ export async function action({ request }: Route.ActionArgs) {
 }
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
-  const { user, pendingChargebacks } = loaderData;
+  const { user, pendingRefundRequests } = loaderData;
   const fetcher = useFetcher();
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -209,40 +209,76 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
         </CardContent>
       </Card>
 
-      {pendingChargebacks.length > 0 && (
+      {pendingRefundRequests.length > 0 && (
         <Card className="mt-8 max-w-md">
           <CardHeader>
-            <h2 className="text-lg font-semibold">Pending Chargeback</h2>
+            <h2 className="text-lg font-semibold">
+              {pendingRefundRequests.length === 1
+                ? "Pending refund request"
+                : "Pending refund requests"}
+            </h2>
             <p className="text-sm text-muted-foreground">
-              {pendingChargebacks.length === 1
-                ? "One chargeback is waiting on us."
-                : `${pendingChargebacks.length} chargebacks are waiting on us.`}
+              {pendingRefundRequests.length === 1
+                ? "One refund request is waiting for the Cadence team."
+                : `${pendingRefundRequests.length} refund requests are waiting for the Cadence team.`}
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            {pendingChargebacks.map((chargeback) => (
-              <div key={chargeback.id} className="rounded-md border p-3">
-                <div className="flex items-start justify-between gap-3">
-                  <Link
-                    to={`/courses/${chargeback.courseSlug}`}
-                    className="font-medium hover:underline"
-                  >
-                    {chargeback.courseTitle}
-                  </Link>
-                  <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-                    Pending Chargeback
-                  </span>
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {formatPrice(chargeback.amountPaid)} · raised{" "}
-                  {new Date(chargeback.requestedAt).toLocaleDateString()}
-                </p>
-                <p className="mt-2 text-sm">{chargeback.reason}</p>
-              </div>
+            {pendingRefundRequests.map((refundRequest) => (
+              <PendingRefundRequest
+                key={refundRequest.id}
+                refundRequest={refundRequest}
+              />
             ))}
           </CardContent>
         </Card>
       )}
+    </div>
+  );
+}
+
+function PendingRefundRequest({
+  refundRequest,
+}: {
+  refundRequest: {
+    id: number;
+    courseTitle: string;
+    courseSlug: string;
+    amountPaid: number;
+    reason: string;
+    requestedAt: string;
+  };
+}) {
+  const fetcher = useFetcher();
+  const isWithdrawing = fetcher.state !== "idle";
+
+  return (
+    <div className="rounded-md border p-3">
+      <div className="flex items-start justify-between gap-3">
+        <Link
+          to={`/courses/${refundRequest.courseSlug}`}
+          className="font-medium hover:underline"
+        >
+          {refundRequest.courseTitle}
+        </Link>
+        <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+          Pending
+        </span>
+      </div>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {formatPrice(refundRequest.amountPaid)} · requested{" "}
+        {new Date(refundRequest.requestedAt).toLocaleDateString()}
+      </p>
+      <p className="mt-2 text-sm">{refundRequest.reason}</p>
+      <fetcher.Form
+        method="post"
+        action={`/refund-requests/${refundRequest.id}/withdraw`}
+        className="mt-3"
+      >
+        <Button type="submit" variant="outline" size="sm" disabled={isWithdrawing}>
+          {isWithdrawing ? "Withdrawing..." : "Withdraw request"}
+        </Button>
+      </fetcher.Form>
     </div>
   );
 }
